@@ -1,0 +1,75 @@
+
+# ==============================
+# Environment variables & secrets
+# ==============================
+.env
+.env.*
+!.env.example
+!.env.template
+
+# ==============================
+# Python
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# ==============================
+# Node.js
+# ==============================
+node_modules/
+.npm/
+.pnpm-store/
+*.tsbuildinfo
+
+# ==============================
+# Build outputs
+# ==============================
+dist/
+build/
+out/
+coverage/
+
+# ==============================
+# Logs
+# ==============================
+*.log
+logs/
+
+# ==============================
+# IDEs and editors
+# ==============================
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# ==============================
+# Operating system
+# ==============================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==============================
+# Local runtime data
+# ==============================
+.local/
+.tmp/
+temp/
+
+# ==============================
+# Test artifacts
+# ==============================
+.nyc_output/
+playwright-report/
+test-results/
