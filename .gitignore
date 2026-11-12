@@ -22,6 +22,7 @@ htmlcov/
 .venv/
 venv/
 env/
+run_commands
 
 # ==============================
 # Node.js
