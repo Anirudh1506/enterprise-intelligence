@@ -1,38 +1,40 @@
 
 import pytest
 
-from datetime import datetime, timezone
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
+from app.api.routes.documents import get_embedding_service
 from app.main import app
+from app.services.embedding_service import EmbeddingError
 
 client = TestClient(app)
 
+DIMS = 4
 
-@pytest.fixture
-def mock_document_service():
-    with patch(
-        "app.api.routes.documents.DocumentService"
-    ) as mock:
 
-        service = mock.return_value
+class FakeEmbeddingService:
+    provider = "google"
+    model = "fake-model"
+    dimensions = DIMS
 
-        service.process_document = AsyncMock(
-            return_value={
-                "document_id": "test-document-id",
-                "filename": "test.txt",
-                "content_type": "text/plain",
-                "status": "processed",
-                "created_at": datetime.now(timezone.utc),
-                "chunks": []
-            }
+    def __init__(self):
+        # vector i is [i, i, i, i] so tests can check chunk <-> vector order
+        self.embed_texts = AsyncMock(
+            side_effect=lambda texts: [[float(i)] * DIMS for i in range(len(texts))]
         )
 
-        yield service
+
+@pytest.fixture(autouse=True)
+def fake_embeddings():
+    # never hit the real Gemini API from route tests
+    fake = FakeEmbeddingService()
+    app.dependency_overrides[get_embedding_service] = lambda: fake
+    yield fake
+    app.dependency_overrides.clear()
 
 
-def test_successful_upload(mock_document_service):
+def test_successful_upload(fake_embeddings):
 
     response = client.post(
         "/api/v1/documents/",
@@ -49,11 +51,29 @@ def test_successful_upload(mock_document_service):
 
     data = response.json()
 
-    assert data["document_id"] == "test-document-id"
     assert data["filename"] == "test.txt"
     assert data["content_type"] == "text/plain"
+    assert data["status"] == "processed"
+    assert data["chunk_count"] == 1
+    assert data["embedding_metadata"] == {
+        "provider": "google", "model": "fake-model", "dimensions": DIMS
+    }
+    assert data["chunks"][0]["content"] == "Hello Enterprise Intelligence"
+    assert data["chunks"][0]["embedding"] == [0.0] * DIMS
 
-    mock_document_service.process_document.assert_awaited_once()
+    fake_embeddings.embed_texts.assert_awaited_once()
+
+
+def test_embedding_failure_returns_502(fake_embeddings):
+    fake_embeddings.embed_texts.side_effect = EmbeddingError("Embedding provider error (status 500)")
+
+    response = client.post(
+        "/api/v1/documents/",
+        files={"file": ("test.txt", b"Hello", "text/plain")}
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Embedding provider error (status 500)"
 
 
 def test_unsupported_extension():
@@ -138,7 +158,7 @@ def test_oversized_upload():
     assert response.status_code == 413
 
 
-def test_upload_with_real_service():
+def test_markdown_upload():
 
     response = client.post(
         "/api/v1/documents/",

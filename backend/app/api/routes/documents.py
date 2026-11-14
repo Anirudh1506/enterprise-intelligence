@@ -1,8 +1,12 @@
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from functools import lru_cache
 from uuid import uuid4
 
-from app.services.document_service import DocumentService
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+
+from app.services.chunking_service import ChunkingService
+from app.services.document_service import DocumentProcessingError, DocumentService
+from app.services.embedding_service import EmbeddingError, EmbeddingService
 from app.schemas.document import DocumentUploadResponse
 
 router = APIRouter()
@@ -14,10 +18,25 @@ MIME_TYPES = {
     ".md": "text/markdown",
 }
 
+@lru_cache
+def get_embedding_service() -> EmbeddingService:
+    # one Gemini client per process; config errors are not cached and surface as 500
+    return EmbeddingService()
+
+
+def get_document_service(
+    embedding_service: EmbeddingService = Depends(get_embedding_service),
+) -> DocumentService:
+    return DocumentService(ChunkingService(), embedding_service)
+
+
 @router.post("/", 
     response_model=DocumentUploadResponse,
     status_code=201)
-async def upload_documents(file: UploadFile = File(...)):
+async def upload_documents(
+    file: UploadFile = File(...),
+    document_service: DocumentService = Depends(get_document_service),
+):
 
     # 1. Validate filename and extension
     if not file.filename:
@@ -61,15 +80,15 @@ async def upload_documents(file: UploadFile = File(...)):
     
     detected_content_type = MIME_TYPES[extension]
 
-    # 5. Pass extracted text to document service
-    document_service = DocumentService()
-
-    result = await document_service.process_document(
-        document_id=str(uuid4()),
-        filename=file.filename,
-        content_type=detected_content_type,
-        text=extracted_text
-    )
-
-    # 6. Return metadata
-    return result
+    # 5. Chunk + embed via the document service
+    try:
+        return await document_service.process_document(
+            document_id=str(uuid4()),
+            filename=file.filename,
+            content_type=detected_content_type,
+            text=extracted_text
+        )
+    except EmbeddingError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from None
+    except DocumentProcessingError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None

@@ -11,6 +11,16 @@ class DocumentChunk(BaseModel):
     end_offset: int
 
 
+class EmbeddedChunk(DocumentChunk):
+    embedding: list[float]
+
+
+class EmbeddingMetadata(BaseModel):
+    provider: str
+    model: str
+    dimensions: int
+
+
 class DocumentUploadResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -19,4 +29,7 @@ class DocumentUploadResponse(BaseModel):
     content_type: str
     status: str
     created_at: datetime
-    chunks: list[DocumentChunk]
+    chunk_count: int
+    embedding_metadata: EmbeddingMetadata
+    # dev only: vectors must not be exposed in the public upload response in production
+    chunks: list[EmbeddedChunk]

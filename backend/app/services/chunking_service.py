@@ -34,3 +34,14 @@ def chunk_text(text: str, document_id:str, chunkSize: int = 500, overlap: int = 
         start += step
 
     return result
+
+
+class ChunkingService:
+    """Owns text segmentation. Thin wrapper so DocumentService can receive it via DI."""
+
+    def __init__(self, chunk_size: int = 500, overlap: int = 100):
+        self.chunk_size = chunk_size
+        self.overlap = overlap
+
+    def chunk(self, text: str, document_id: str) -> list[DocumentChunk]:
+        return chunk_text(text, document_id, self.chunk_size, self.overlap)
