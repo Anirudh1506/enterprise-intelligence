@@ -79,4 +79,10 @@ test-results/
 # Uploaded documents (local storage)
 # ==============================
 backend/storage/
+
+# ==============================
+# Uploaded documents (local storage)
+# ==============================
+backend/storage/
+
 .claude
