@@ -1,0 +1,15 @@
+Northwind Labs - Engineering Onboarding Guide
+
+Week 1
+New engineers receive their laptop on day one from IT. Your manager will assign an onboarding buddy who is your first point of contact for questions during the first month.
+During the first week you should set up your development environment, get access to the main repositories, and complete the mandatory security training.
+
+Code review
+Every change requires approval from at least one other engineer before merging. Changes to payment or authentication code require two approvals, one of which must come from the security team.
+Pull requests should stay under 400 lines where possible.
+
+Deployments
+Production deployments happen Monday to Thursday between 10:00 and 16:00. There are no deployments on Fridays or the day before a public holiday unless approved by the on-call lead.
+
+On-call
+Engineers join the on-call rotation after three months. On-call shifts last one week and are compensated with one extra day of leave per shift.

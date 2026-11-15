@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+from typing import Optional
 
-from app.schemas.document import DocumentUploadResponse, EmbeddedChunk, EmbeddingMetadata
+from app.schemas.document import EmbeddedChunk, EmbeddingMetadata, ProcessedDocument
 
 from .chunking_service import ChunkingService
 from .embedding_service import EmbeddingService
@@ -26,12 +27,18 @@ class DocumentService:
         document_id: str,
         filename: str,
         content_type: str,
-        text: str,
-    ) -> DocumentUploadResponse:
-        if type(text) is not str or not text.strip():
+        text: Optional[str] = None,
+        pages: Optional[list[tuple[Optional[int], str]]] = None,
+    ) -> ProcessedDocument:
+        """Chunk + embed. Pass `pages` (page_number, text) for paged formats like PDF."""
+        if pages is None:
+            if type(text) is not str or not text.strip():
+                raise ValueError("Document text must not be empty")
+            pages = [(None, text)]
+        elif not pages or not any(t.strip() for _, t in pages):
             raise ValueError("Document text must not be empty")
 
-        chunks = self.chunking_service.chunk(text, document_id)
+        chunks = self.chunking_service.chunk_pages(pages, document_id)
         if not chunks:
             raise DocumentProcessingError("No chunks were generated for the document")
 
@@ -48,7 +55,7 @@ class DocumentService:
             for chunk, vector in zip(chunks, vectors)
         ]
 
-        return DocumentUploadResponse(
+        return ProcessedDocument(
             document_id=document_id,
             filename=filename,
             content_type=content_type or "application/octet-stream",
