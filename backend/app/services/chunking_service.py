@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import uuid4
 
 from app.schemas.document import DocumentChunk
@@ -45,3 +46,18 @@ class ChunkingService:
 
     def chunk(self, text: str, document_id: str) -> list[DocumentChunk]:
         return chunk_text(text, document_id, self.chunk_size, self.overlap)
+
+    def chunk_pages(
+        self, pages: list[tuple[Optional[int], str]], document_id: str
+    ) -> list[DocumentChunk]:
+        """Chunk each page separately so every chunk keeps its page number.
+
+        chunk_index is global across the document; offsets are relative to the page.
+        """
+        chunks: list[DocumentChunk] = []
+        for page_number, text in pages:
+            for c in self.chunk(text, document_id):
+                chunks.append(
+                    c.model_copy(update={"chunk_index": len(chunks), "page_number": page_number})
+                )
+        return chunks

@@ -21,6 +21,8 @@ ENV_VARS = (
     "GEMINI_EMBEDDING_MODEL",
     "GEMINI_EMBEDDING_TASK_TYPE",
     "GEMINI_EMBEDDING_DIMENSIONS",
+    "GEMINI_EMBEDDING_BATCH_SIZE",
+    "GEMINI_TIMEOUT_SECONDS",
 )
 TEST_DIMS = 3
 
@@ -64,7 +66,10 @@ def run(coro):
 # --- configuration ---
 
 def test_client_initialized_from_env(service, mock_client_cls):
-    mock_client_cls.assert_called_once_with(api_key=FAKE_KEY)
+    mock_client_cls.assert_called_once()
+    kwargs = mock_client_cls.call_args.kwargs
+    assert kwargs["api_key"] == FAKE_KEY
+    assert kwargs["http_options"].timeout == 60_000
 
 
 def test_defaults_when_optional_env_missing(env, mock_client_cls):
@@ -293,3 +298,24 @@ def test_batch_invalid_input_rejected(service, texts):
     with pytest.raises(ValueError):
         run(service.embed_texts(texts))
     embed_mock(service).assert_not_awaited()
+
+
+def test_timeout_maps_to_safe_error(service):
+    embed_mock(service).side_effect = httpx.ReadTimeout("slow")
+    with pytest.raises(EmbeddingError, match="timed out"):
+        run(service.embed_text("hello"))
+
+
+def test_batches_split_by_batch_size(env, mock_client_cls):
+    env.setenv("GEMINI_EMBEDDING_BATCH_SIZE", "2")
+    svc = EmbeddingService()
+    embed_mock(svc).side_effect = lambda **kw: batch_response(
+        *[[float(len(t))] * TEST_DIMS for t in kw["contents"]]
+    )
+
+    result = run(svc.embed_texts(["a", "bb", "ccc", "dddd", "eeeee"]))
+
+    assert [call.kwargs["contents"] for call in embed_mock(svc).await_args_list] == [
+        ["a", "bb"], ["ccc", "dddd"], ["eeeee"]
+    ]
+    assert [v[0] for v in result] == [1.0, 2.0, 3.0, 4.0, 5.0]
