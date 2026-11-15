@@ -82,7 +82,7 @@ def test_vectors_follow_provider_order_not_content():
     # provider returns distinct vectors; each must land on the chunk at the same position
     vectors = [[1.0] * DIMS, [2.0] * DIMS, [3.0] * DIMS]
     chunking = MagicMock()
-    chunking.chunk.return_value = ChunkingService(chunk_size=4, overlap=0).chunk("aaaabbbbcccc", DOC_ID)
+    chunking.chunk_pages.return_value = ChunkingService(chunk_size=4, overlap=0).chunk("aaaabbbbcccc", DOC_ID)
     service = DocumentService(chunking, make_embedding_service(lambda texts: vectors))
 
     result = process(service, "aaaabbbbcccc")
@@ -101,7 +101,7 @@ def test_empty_document_rejected(service, embedding_service, text):
 
 def test_no_chunks_generated(embedding_service):
     chunking = MagicMock()
-    chunking.chunk.return_value = []
+    chunking.chunk_pages.return_value = []
     service = DocumentService(chunking, embedding_service)
 
     with pytest.raises(DocumentProcessingError, match="No chunks"):
@@ -127,3 +127,24 @@ def test_embedding_count_mismatch_fails(returned):
 
     with pytest.raises(DocumentProcessingError, match="count mismatch"):
         process(service, "aaaabbbb")  # 2 chunks
+
+
+def test_pages_keep_page_numbers_and_global_index(service):
+    result = asyncio.run(
+        service.process_document(
+            document_id=DOC_ID, filename="doc.pdf", content_type="application/pdf",
+            pages=[(1, "first page text here"), (3, "third")],
+        )
+    )
+
+    assert [c.chunk_index for c in result.chunks] == list(range(result.chunk_count))
+    assert {c.page_number for c in result.chunks} == {1, 3}
+    assert result.chunks[-1].content == "third"
+    assert result.chunks[-1].page_number == 3
+
+
+@pytest.mark.parametrize("pages", [[], [(1, "  "), (2, "")]])
+def test_empty_pages_rejected(service, embedding_service, pages):
+    with pytest.raises(ValueError):
+        asyncio.run(service.process_document(DOC_ID, "doc.pdf", "application/pdf", pages=pages))
+    embedding_service.embed_texts.assert_not_awaited()
